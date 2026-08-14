@@ -1,0 +1,15 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+.vite/
+*.log
+
+# Local verification output (screenshots, traces, and reports)
+artifacts/
+
+# Desktop installers are produced locally under src-tauri/target/.
+*.exe
+*.msi
+*.dmg
+*.app

@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions for files explicitly selected by the user",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file"
+  ]
+}
