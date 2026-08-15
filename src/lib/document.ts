@@ -4,17 +4,55 @@ export interface MarkdownDocument {
   name: string;
   markdown: string;
   savedMarkdown: string;
+  workspacePath?: string;
+  workspaceName?: string;
+  relativePath?: string;
+}
+
+export interface Workspace {
+  path: string;
+  name: string;
 }
 
 export const fileNameFromPath = (path: string) => path.split(/[\\/]/).pop() || path;
 
-export const createDocument = (path: string, markdown: string): MarkdownDocument => ({
+export const relativePathFromRoot = (rootPath: string, path: string) => {
+  const normalizedRoot = rootPath.replace(/[\\/]+$/, '');
+  const normalizedPath = path.replace(/\\/g, '/');
+  const normalizedRootPath = normalizedRoot.replace(/\\/g, '/');
+  const prefix = `${normalizedRootPath}/`;
+  return normalizedPath.startsWith(prefix) ? normalizedPath.slice(prefix.length) : fileNameFromPath(path);
+};
+
+export const createWorkspace = (path: string): Workspace => ({
+  path,
+  name: fileNameFromPath(path),
+});
+
+export const createDocument = (
+  path: string,
+  markdown: string,
+  workspace?: Workspace,
+): MarkdownDocument => ({
   id: path,
   path,
   name: fileNameFromPath(path),
   markdown,
   savedMarkdown: markdown,
+  ...(workspace && {
+    workspacePath: workspace.path,
+    workspaceName: workspace.name,
+    relativePath: relativePathFromRoot(workspace.path, path),
+  }),
 });
+
+export const mergeWorkspaces = (current: Workspace[], incoming: Workspace[]) => {
+  const existingPaths = new Set(current.map((workspace) => workspace.path));
+  return [...current, ...incoming.filter((workspace) => !existingPaths.has(workspace.path))];
+};
+
+export const documentsForWorkspace = (documents: MarkdownDocument[], path: string) =>
+  documents.filter((document) => document.workspacePath === path);
 
 export const isDirty = (document: MarkdownDocument) =>
   document.markdown !== document.savedMarkdown;

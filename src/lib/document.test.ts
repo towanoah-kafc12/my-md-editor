@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, fileNameFromPath, isDirty, markSaved, mergeDocuments, updateMarkdown } from './document';
+import { createDocument, createWorkspace, documentsForWorkspace, fileNameFromPath, isDirty, markSaved, mergeDocuments, mergeWorkspaces, relativePathFromRoot, updateMarkdown } from './document';
 
 describe('document state', () => {
   it('extracts names from Windows and POSIX paths', () => {
@@ -21,5 +21,20 @@ describe('document state', () => {
     const result = mergeDocuments(current, [createDocument('note.md', 'new disk'), createDocument('other.md', 'other')]);
     expect(result).toHaveLength(2);
     expect(result[0].markdown).toBe('draft');
+  });
+
+  it('assigns workspace metadata and relative paths to documents', () => {
+    const workspace = createWorkspace('C:\\notes');
+    const document = createDocument('C:\\notes\\projects\\today.md', '# Today', workspace);
+    expect(workspace.name).toBe('notes');
+    expect(document.relativePath).toBe('projects/today.md');
+    expect(relativePathFromRoot('/notes', '/notes/today.md')).toBe('today.md');
+    expect(documentsForWorkspace([document], workspace.path)).toEqual([document]);
+  });
+
+  it('keeps existing workspaces and documents when a duplicate root is opened', () => {
+    const workspace = createWorkspace('C:\\notes');
+    const other = createWorkspace('C:\\other');
+    expect(mergeWorkspaces([workspace], [workspace, other])).toEqual([workspace, other]);
   });
 });

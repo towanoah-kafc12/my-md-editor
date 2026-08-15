@@ -1,7 +1,7 @@
 <script lang="ts">
   import Editor from './lib/Editor.svelte';
-  import { createDocument, isDirty, markSaved, mergeDocuments, updateMarkdown, type MarkdownDocument } from './lib/document';
-  import { pickMarkdownFiles, saveMarkdownFile } from './lib/files';
+  import { createDocument, documentsForWorkspace, isDirty, markSaved, mergeDocuments, mergeWorkspaces, updateMarkdown, type MarkdownDocument, type Workspace } from './lib/document';
+  import { pickMarkdownFiles, pickWorkspaceFolders, readWorkspaceDocuments, saveMarkdownFile } from './lib/files';
   import { onMount } from 'svelte';
 
   const demo = createDocument('Welcome.md', `# Welcome to Plainmark
@@ -18,6 +18,7 @@ Write **Markdown** and see it take shape right where you type.
 `);
   const browserDemo = import.meta.env.DEV && !window.__TAURI_INTERNALS__;
   let documents: MarkdownDocument[] = $state(browserDemo ? [demo] : []);
+  let workspaces: Workspace[] = $state([]);
   let activeId: string | null = $state(browserDemo ? demo.id : null);
   let message = $state('Ready');
   let busy = $state(false);
@@ -39,6 +40,32 @@ Write **Markdown** and see it take shape right where you type.
     } finally { busy = false; }
   }
 
+  async function openWorkspaces() {
+    busy = true;
+    try {
+      if (!window.__TAURI_INTERNALS__) {
+        message = 'Folder dialogs are available in the desktop app.';
+        return;
+      }
+      const selected = await pickWorkspaceFolders();
+      const newWorkspaces = selected.filter(
+        (workspace) => !workspaces.some((current) => current.path === workspace.path),
+      );
+      const results = await Promise.allSettled(newWorkspaces.map(readWorkspaceDocuments));
+      const loaded = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+      const failed = results.filter((result) => result.status === 'rejected').length;
+      workspaces = mergeWorkspaces(workspaces, selected);
+      documents = mergeDocuments(documents, loaded);
+      if (loaded.length) activeId = loaded[0].id;
+      if (!selected.length) message = 'Open cancelled';
+      else if (failed) message = `${loaded.length} file${loaded.length === 1 ? '' : 's'} opened; ${failed} folder${failed === 1 ? '' : 's'} could not be read`;
+      else if (!loaded.length) message = 'No Markdown files found in selected folder';
+      else message = `${loaded.length} file${loaded.length === 1 ? '' : 's'} opened from ${newWorkspaces.length} folder${newWorkspaces.length === 1 ? '' : 's'}`;
+    } catch (error) {
+      message = `Could not open folder: ${error instanceof Error ? error.message : String(error)}`;
+    } finally { busy = false; }
+  }
+
   async function saveActive() {
     if (!active || !isDirty(active)) return;
     busy = true;
@@ -55,6 +82,7 @@ Write **Markdown** and see it take shape right where you type.
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveActive(); }
     if (event.key.toLowerCase() === 'o') { event.preventDefault(); void openFiles(); }
+    if (event.key.toLowerCase() === 'k') { event.preventDefault(); void openWorkspaces(); }
   }
 
   onMount(() => {
@@ -71,16 +99,33 @@ Write **Markdown** and see it take shape right where you type.
     <button class="open-button" onclick={openFiles} disabled={busy} aria-label="Open Markdown files">
       <span>＋</span> Open files <kbd>Ctrl O</kbd>
     </button>
+    <button class="open-button workspace-button" onclick={openWorkspaces} disabled={busy} aria-label="Open workspace folders">
+      <span>□</span> Open folders <kbd>Ctrl K</kbd>
+    </button>
     <div class="section-label">OPEN DOCUMENTS</div>
     <nav aria-label="Open documents">
-      {#each documents as document (document.id)}
+      {#each documents.filter((document) => !document.workspacePath) as document (document.id)}
         <button class:active={document.id === activeId} class="file-item" onclick={() => activeId = document.id}>
           <span class="file-icon">#</span><span class="file-name">{document.name}</span>
           {#if isDirty(document)}<span class="dirty" title="Unsaved changes">●</span>{/if}
         </button>
-      {:else}
-        <p class="sidebar-empty">No files open yet.<br />Choose a Markdown file to begin.</p>
       {/each}
+      {#each workspaces as workspace (workspace.path)}
+        <div class="workspace-section">
+          <div class="workspace-label" title={workspace.path}>⌁ {workspace.name}</div>
+          {#each documentsForWorkspace(documents, workspace.path) as document (document.id)}
+            <button class:active={document.id === activeId} class="file-item workspace-file" onclick={() => activeId = document.id} title={document.relativePath}>
+              <span class="file-icon">#</span><span class="file-name">{document.relativePath ?? document.name}</span>
+              {#if isDirty(document)}<span class="dirty" title="Unsaved changes">●</span>{/if}
+            </button>
+          {:else}
+            <p class="sidebar-empty workspace-empty">No Markdown files</p>
+          {/each}
+        </div>
+      {/each}
+      {#if !documents.length && !workspaces.length}
+        <p class="sidebar-empty">No files open yet.<br />Choose a Markdown file or folder to begin.</p>
+      {/if}
     </nav>
     <div class="privacy"><span>◇</span><div><strong>Local only</strong><small>Your writing never leaves this device.</small></div></div>
   </aside>
@@ -99,7 +144,7 @@ Write **Markdown** and see it take shape right where you type.
           <Editor documentId={active.id} markdown={active.markdown} onChange={(value) => documents = updateMarkdown(documents, active!.id, value)} />
         {/key}
       {:else}
-        <div class="empty-state"><div class="empty-logo">P</div><h1>Open a Markdown file</h1><p>Your document will appear here, ready to edit.</p><button onclick={openFiles}>Choose files</button><small>or press Ctrl+O</small></div>
+        <div class="empty-state"><div class="empty-logo">P</div><h1>Open a Markdown file</h1><p>Your document will appear here, ready to edit.</p><button onclick={openFiles}>Choose files</button><button class="empty-folder-button" onclick={openWorkspaces}>Choose folder</button><small>or press Ctrl+O / Ctrl+K</small></div>
       {/if}
     </div>
     <footer><span>{message}</span><span>Markdown <b>·</b> UTF-8</span></footer>
