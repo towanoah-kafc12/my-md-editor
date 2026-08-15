@@ -1,9 +1,12 @@
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #e7e9ee;
   background: #111318;
   color-scheme: dark;
   font-synthesis: none;
+}
+
+.app-shell {
+  --editor-font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", ui-sans-serif, system-ui, sans-serif;
   --background: #111318;
   --sidebar: #191c23;
   --surface: #1f232c;
@@ -18,19 +21,82 @@
   --accent-strong: #3578d4;
   --accent-hover: #4a8bec;
   --warning: #f4b35e;
+  --selection: #315f9f;
+  --selection-text: #f7f9fc;
+  --inline-code: #f3b7cd;
+  --inline-code-background: #292d36;
+  --code-background: #181b21;
+  --code-keyword: #c792ea;
+  --code-string: #c3e88d;
+  --code-number: #f78c6c;
+  --code-comment: #7e8999;
+  font-family: var(--editor-font-family);
+}
+
+.app-shell[data-theme="light"] {
+  color-scheme: light;
+  --background: #f7f8fa;
+  --sidebar: #eef1f5;
+  --surface: #ffffff;
+  --surface-hover: #e5e9ef;
+  --surface-active: #d9e4f5;
+  --border: #d1d8e1;
+  --border-strong: #aeb9c7;
+  --text: #202632;
+  --text-muted: #596579;
+  --text-subtle: #728096;
+  --accent: #1467bf;
+  --accent-strong: #1467bf;
+  --accent-hover: #0d549f;
+  --warning: #a35300;
+  --selection: #b9d7f7;
+  --selection-text: #172033;
+  --inline-code: #9c3057;
+  --inline-code-background: #f1f3f6;
+  --code-background: #f3f5f8;
+  --code-keyword: #7c3fb0;
+  --code-string: #397c29;
+  --code-number: #b04c21;
+  --code-comment: #6c7888;
+}
+
+.app-shell[data-theme="midnight"] {
+  --background: #09111f;
+  --sidebar: #101d31;
+  --surface: #15253c;
+  --surface-hover: #1c3150;
+  --surface-active: #254363;
+  --border: #29415f;
+  --border-strong: #426584;
+  --text: #dbeafe;
+  --text-muted: #a9c2dd;
+  --text-subtle: #7795b5;
+  --accent: #6ecbff;
+  --accent-strong: #167db7;
+  --accent-hover: #299bd9;
+  --warning: #ffc56e;
+  --selection: #1d5a8b;
+  --selection-text: #eff8ff;
+  --inline-code: #ffb4cd;
+  --inline-code-background: #112944;
+  --code-background: #0c1a2d;
+  --code-keyword: #d5a8ff;
+  --code-string: #a7e99a;
+  --code-number: #ffba82;
+  --code-comment: #7795b5;
 }
 
 * { box-sizing: border-box; }
 html, body, #app { margin: 0; height: 100%; overflow: hidden; }
-body { background: var(--background); }
+body { background: #111318; }
 button { font: inherit; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-::selection { color: #f7f9fc; background: #315f9f; }
+.app-shell ::selection { color: var(--selection-text); background: var(--selection); }
 
 .app-shell { display: flex; height: 100%; min-width: 720px; }
 .sidebar { width: 248px; flex: 0 0 248px; display: flex; flex-direction: column; padding: 18px 12px 14px; background: var(--sidebar); border-right: 1px solid var(--border); }
 .brand { display: flex; gap: 10px; align-items: center; padding: 0 8px 18px; letter-spacing: -.2px; }
-.brand-mark, .empty-logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #111827; font-family: Georgia, serif; font-weight: bold; }
+.brand-mark, .empty-logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; background: var(--accent); color: #111827; font-family: var(--editor-font-family); font-weight: bold; }
 .open-button { width: 100%; height: 38px; display: flex; gap: 8px; align-items: center; padding: 0 10px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 7px; box-shadow: 0 1px 2px #00000040; cursor: pointer; text-align: left; }
 .open-button:hover:not(:disabled) { background: var(--surface-hover); }
 .workspace-button { margin-top: 8px; }
@@ -49,6 +115,9 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dirty { margin-left: auto; color: var(--warning); font-size: 8px; }
 .sidebar-empty { margin: 4px 9px; color: var(--text-subtle); font-size: 12px; line-height: 1.6; }
+.settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 8px 0; }
+.settings label { display: grid; gap: 4px; color: var(--text-subtle); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.settings select { min-width: 0; padding: 5px 6px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; font: inherit; font-size: 11px; }
 .privacy { display: flex; gap: 9px; align-items: start; margin-top: auto; padding: 12px 8px 0; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }
 .privacy div { display: flex; flex-direction: column; gap: 3px; }
 .privacy small { color: var(--text-subtle); font-size: 10px; line-height: 1.35; }
@@ -58,7 +127,7 @@ nav { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .file-heading > div { display: flex; flex-direction: column; gap: 3px; }
 .file-heading strong { font-size: 13px; }
 .file-heading small { color: var(--text-subtle); font-size: 10px; }
-.document-glyph { color: var(--text-muted); font: bold 20px Georgia, serif; }
+.document-glyph { color: var(--text-muted); font: bold 20px var(--editor-font-family); }
 .save-button { padding: 7px 11px; color: var(--text-subtle); background: transparent; border: 1px solid transparent; border-radius: 6px; }
 .save-button.available { color: #fff; background: var(--accent-strong); cursor: pointer; }
 .save-button.available:hover:not(:disabled) { background: var(--accent-hover); }
@@ -90,16 +159,17 @@ footer b { padding: 0 5px; }
   --crepe-color-on-secondary: var(--text);
   --crepe-color-inverse: var(--text);
   --crepe-color-on-inverse: var(--background);
-  --crepe-color-inline-code: #f3b7cd;
-  --crepe-color-error: #ffb4ab;
+  --crepe-color-inline-code: var(--inline-code);
+  --crepe-color-error: var(--warning);
   --crepe-color-hover: var(--surface-hover);
-  --crepe-color-selected: #2b527f;
-  --crepe-color-inline-area: #292d36;
+  --crepe-color-selected: var(--selection);
+  --crepe-color-inline-area: var(--inline-code-background);
   --crepe-shadow-1: 0 1px 3px #00000055;
   --crepe-shadow-2: 0 5px 18px #00000070;
   background: transparent;
 }
-.editor-shell .ProseMirror { min-height: calc(100vh - 220px); padding: 0 !important; outline: none; color: var(--text); font-size: 16px; line-height: 1.75; caret-color: var(--accent); }
+.editor-shell .ProseMirror { min-height: calc(100vh - 220px); padding: 0 !important; outline: none; color: var(--text); font-family: var(--editor-font-family); font-size: 16px; line-height: 1.75; caret-color: var(--accent); }
+.editor-shell .ProseMirror h1, .editor-shell .ProseMirror h2, .editor-shell .ProseMirror h3, .editor-shell .ProseMirror h4, .editor-shell .ProseMirror h5, .editor-shell .ProseMirror h6 { font-family: var(--editor-font-family); }
 .editor-shell .ProseMirror h1 { margin-top: 0; font-size: 36px; letter-spacing: -.035em; }
 .editor-shell .ProseMirror h2 { margin-top: 1.8em; font-size: 25px; }
 .editor-shell .ProseMirror a { color: var(--accent); }
@@ -107,9 +177,14 @@ footer b { padding: 0 5px; }
 .editor-shell .ProseMirror li::marker { color: var(--text); }
 .editor-shell .milkdown .milkdown-list-item-block li .label-wrapper,
 .editor-shell .milkdown .milkdown-list-item-block li .label-wrapper svg { color: var(--text); fill: var(--text); }
-.editor-shell .ProseMirror code { color: #f3b7cd; background: #292d36; }
-.editor-shell .ProseMirror pre { background: #181b21; border: 1px solid var(--border); }
+.editor-shell .ProseMirror code { color: var(--inline-code); background: var(--inline-code-background); }
+.editor-shell .ProseMirror pre { color: var(--text); background: var(--code-background); border: 1px solid var(--border); }
+.editor-shell .ProseMirror pre code { color: inherit; background: transparent; }
+.editor-shell .ProseMirror pre .tok-keyword, .editor-shell .ProseMirror pre .tok-operator { color: var(--code-keyword); }
+.editor-shell .ProseMirror pre .tok-string, .editor-shell .ProseMirror pre .tok-regexp { color: var(--code-string); }
+.editor-shell .ProseMirror pre .tok-number, .editor-shell .ProseMirror pre .tok-bool { color: var(--code-number); }
+.editor-shell .ProseMirror pre .tok-comment { color: var(--code-comment); }
 .editor-shell .ProseMirror hr { border-color: var(--border); }
-.editor-shell .ProseMirror ::selection { color: #f7f9fc; background: #315f9f; }
+.editor-shell .ProseMirror ::selection { color: var(--selection-text); background: var(--selection); }
 
 @media (max-width: 820px) { .sidebar { width: 205px; flex-basis: 205px; }.editor-shell { padding-inline: 40px; } }

@@ -17,7 +17,7 @@
       root,
       defaultValue: markdown,
       features: {
-        [Crepe.Feature.CodeMirror]: false,
+        [Crepe.Feature.CodeMirror]: true,
         [Crepe.Feature.ImageBlock]: false,
         [Crepe.Feature.Latex]: false,
       },

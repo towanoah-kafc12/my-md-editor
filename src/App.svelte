@@ -2,6 +2,7 @@
   import Editor from './lib/Editor.svelte';
   import { createDocument, documentsForWorkspace, isDirty, markSaved, mergeDocuments, mergeWorkspaces, updateMarkdown, type MarkdownDocument, type Workspace } from './lib/document';
   import { pickMarkdownFiles, pickWorkspaceFolders, readWorkspaceDocuments, saveMarkdownFile } from './lib/files';
+  import { fontOptions, loadSettings, saveSettings, type FontChoice, type ThemeChoice } from './lib/settings';
   import { onMount } from 'svelte';
 
   const demo = createDocument('Welcome.md', `# Welcome to Plainmark
@@ -20,6 +21,9 @@ Write **Markdown** and see it take shape right where you type.
   let documents: MarkdownDocument[] = $state(browserDemo ? [demo] : []);
   let workspaces: Workspace[] = $state([]);
   let activeId: string | null = $state(browserDemo ? demo.id : null);
+  const settings = loadSettings();
+  let font: FontChoice = $state(settings.font);
+  let theme: ThemeChoice = $state(settings.theme);
   let message = $state('Ready');
   let busy = $state(false);
   let active = $derived(documents.find((document) => document.id === activeId));
@@ -78,6 +82,18 @@ Write **Markdown** and see it take shape right where you type.
     } finally { busy = false; }
   }
 
+  function setFont(value: string) {
+    if (!(value in fontOptions)) return;
+    font = value as FontChoice;
+    saveSettings({ font, theme });
+  }
+
+  function setTheme(value: string) {
+    if (!['dark', 'light', 'midnight'].includes(value)) return;
+    theme = value as ThemeChoice;
+    saveSettings({ font, theme });
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveActive(); }
@@ -93,7 +109,7 @@ Write **Markdown** and see it take shape right where you type.
 
 <svelte:head><title>{active ? `${isDirty(active) ? '• ' : ''}${active.name}` : 'Plainmark'}</title></svelte:head>
 
-<main class="app-shell">
+<main class="app-shell" data-theme={theme} style={`--editor-font-family: ${fontOptions[font]}`}>
   <aside class="sidebar">
     <div class="brand"><span class="brand-mark">P</span><strong>Plainmark</strong></div>
     <button class="open-button" onclick={openFiles} disabled={busy} aria-label="Open Markdown files">
@@ -127,6 +143,22 @@ Write **Markdown** and see it take shape right where you type.
         <p class="sidebar-empty">No files open yet.<br />Choose a Markdown file or folder to begin.</p>
       {/if}
     </nav>
+    <div class="settings" aria-label="Editor settings">
+      <label>Font
+        <select value={font} onchange={(event) => setFont(event.currentTarget.value)} aria-label="Editor font">
+          <option value="gothic">Gothic</option>
+          <option value="system">System sans</option>
+          <option value="serif">Serif</option>
+        </select>
+      </label>
+      <label>Theme
+        <select value={theme} onchange={(event) => setTheme(event.currentTarget.value)} aria-label="Color theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="midnight">Midnight</option>
+        </select>
+      </label>
+    </div>
     <div class="privacy"><span>◇</span><div><strong>Local only</strong><small>Your writing never leaves this device.</small></div></div>
   </aside>
 

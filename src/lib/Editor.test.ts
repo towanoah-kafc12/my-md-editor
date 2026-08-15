@@ -11,10 +11,12 @@ const on = vi.fn((register: (listener: { markdownUpdated: typeof markdownUpdated
   register({ markdownUpdated }),
 );
 const destroy = vi.fn(() => Promise.resolve());
+const createConfig = vi.fn();
 
 vi.mock('@milkdown/crepe', () => {
   class MockCrepe {
     static Feature = { CodeMirror: 'code', ImageBlock: 'image', Latex: 'latex' };
+    constructor(config: unknown) { createConfig(config); }
     on = on;
     destroy = destroy;
     getMarkdown = () => '# Note\n';
@@ -53,6 +55,13 @@ describe('Editor initialization', () => {
     notifyMarkdown?.({}, '# Updated', '# Note\n');
     expect(onChange).toHaveBeenCalledOnce();
     expect(onChange).toHaveBeenCalledWith('# Updated');
+  });
+
+  it('enables CodeMirror for editable highlighted code blocks', () => {
+    render(Editor, { documentId: 'note.md', markdown: '# Note', onChange: vi.fn() });
+    expect(createConfig).toHaveBeenCalledWith(expect.objectContaining({
+      features: expect.objectContaining({ code: true }),
+    }));
   });
 
   it('destroys Crepe if the document is switched during initialization', async () => {
