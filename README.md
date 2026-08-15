@@ -4,10 +4,10 @@ Tauri 2、Svelte、Crepe で作る、ローカルファイルを直接扱う軽�
 
 ## 動作環境
 
-- Windows（第一対象）
-- Node.js と npm
-- Rust stable / Cargo
-- Tauri が要求する Microsoft C++ Build Tools、Windows SDK、WebView2
+* Windows（第一対象）
+* Node.js と npm
+* Rust stable / Cargo
+* Tauri が要求する Microsoft C++ Build Tools、Windows SDK、WebView2
 
 Windows の詳しい要件は、[Tauri の Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows) を確認してください。
 
@@ -80,10 +80,10 @@ npm run build
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-- `npm test`: フロントエンドのテストを実行します。
-- `npm run check`: Svelte / TypeScript の型・静的チェックを実行します。
-- `npm run build`: ブラウザ向けプロダクションビルドを実行します。
-- `cargo check --manifest-path src-tauri/Cargo.toml`: Rust / Tauri ホストのコンパイル可否を確認します。
+* `npm test`: フロントエンドのユニットテストを実行します。
+* `npm run check`: Svelte / TypeScript の型・静的チェックを実行します。
+* `npm run build`: ブラウザ向けプロダクションビルドを実行します。
+* `cargo check --manifest-path src-tauri/Cargo.toml`: Rust / Tauri ホストのコンパイル可否を確認します。
 
 ## ネイティブ動作の確認
 
@@ -91,5 +91,6 @@ Windows では、`npm run tauri dev` で起動したアプリにおいて、複�
 
 ## MVP のショートカット
 
-- `Ctrl+O` / `Cmd+O`: 1つ以上の Markdown ファイルを開く
-- `Ctrl+S` / `Cmd+S`: 選択中のファイルを保存する
+* `Ctrl+O` / `Cmd+O`: 1つ以上の Markdown ファイルを開く
+* `Ctrl+S` / `Cmd+S`: 選択中のファイルを保存する
+
