@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDocument, createWorkspace, documentsForWorkspace, fileNameFromPath, isDirty, markSaved, mergeDocuments, mergeWorkspaces, relativePathFromRoot, updateMarkdown } from './document';
+import { createDocument, createWorkspace, documentsForWorkspace, fileNameFromPath, isDirty, markSaved, mergeDocuments, mergeWorkspaces, relativePathFromRoot, updateMarkdown, workspaceTreeNodes } from './document';
 
 describe('document state', () => {
   it('extracts names from Windows and POSIX paths', () => {
@@ -36,5 +36,26 @@ describe('document state', () => {
     const workspace = createWorkspace('C:\\notes');
     const other = createWorkspace('C:\\other');
     expect(mergeWorkspaces([workspace], [workspace, other])).toEqual([workspace, other]);
+  });
+
+  it('builds tree nodes that preserve nested folder structure', () => {
+    const workspace = createWorkspace('C:\\notes', ['docs', 'docs/empty']);
+    const documents = [
+      createDocument('C:\\notes\\README.md', '# Root', workspace),
+      createDocument('C:\\notes\\docs\\00_base\\idea.md', '# Idea', workspace),
+      createDocument('C:\\notes\\docs\\task.md', '# Task', workspace),
+    ];
+
+    expect(workspaceTreeNodes(documents, workspace)).toMatchObject([
+      {
+        text: 'docs',
+        nodes: [
+          { text: '00_base', nodes: [{ text: 'idea.md' }] },
+          { text: 'empty', nodes: [] },
+          { text: 'task.md' },
+        ],
+      },
+      { text: 'README.md' },
+    ]);
   });
 });

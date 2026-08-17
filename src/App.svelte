@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { TreeView } from 'carbon-components-svelte';
   import Editor from './lib/Editor.svelte';
-  import { createDocument, documentsForWorkspace, isDirty, markSaved, mergeDocuments, mergeWorkspaces, updateMarkdown, type MarkdownDocument, type Workspace } from './lib/document';
-  import { pickMarkdownFiles, pickWorkspaceFolders, readWorkspaceDocuments, saveMarkdownFile } from './lib/files';
+  import { createDocument, isDirty, markSaved, mergeDocuments, mergeWorkspaces, updateMarkdown, workspaceTreeNodes, type MarkdownDocument, type Workspace, type WorkspaceTreeNode } from './lib/document';
+  import { pickWorkspaceFolders, readWorkspaceDocuments, saveMarkdownFile } from './lib/files';
   import { fontOptions, loadSettings, saveSettings, type FontChoice, type ThemeChoice } from './lib/settings';
   import { onMount } from 'svelte';
 
@@ -26,23 +27,11 @@ Write **Markdown** and see it take shape right where you type.
   let theme: ThemeChoice = $state(settings.theme);
   let message = $state('Ready');
   let busy = $state(false);
+  let settingsOpen = $state(false);
+  let workspaceMenu: { x: number; y: number; workspace: Workspace } | null = $state(null);
+  let expandedIds: string[] = $state([]);
   let active = $derived(documents.find((document) => document.id === activeId));
-
-  async function openFiles() {
-    busy = true;
-    try {
-      if (!window.__TAURI_INTERNALS__) {
-        message = 'File dialogs are available in the desktop app.';
-        return;
-      }
-      const opened = await pickMarkdownFiles();
-      documents = mergeDocuments(documents, opened);
-      if (opened.length) activeId = opened[0].id;
-      message = opened.length ? `${opened.length} file${opened.length === 1 ? '' : 's'} opened` : 'Open cancelled';
-    } catch (error) {
-      message = `Could not open file: ${error instanceof Error ? error.message : String(error)}`;
-    } finally { busy = false; }
-  }
+  let standaloneDocuments = $derived(documents.filter((document) => !document.workspacePath));
 
   async function openWorkspaces() {
     busy = true;
@@ -52,22 +41,65 @@ Write **Markdown** and see it take shape right where you type.
         return;
       }
       const selected = await pickWorkspaceFolders();
-      const newWorkspaces = selected.filter(
-        (workspace) => !workspaces.some((current) => current.path === workspace.path),
-      );
-      const results = await Promise.allSettled(newWorkspaces.map(readWorkspaceDocuments));
-      const loaded = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
-      const failed = results.filter((result) => result.status === 'rejected').length;
-      workspaces = mergeWorkspaces(workspaces, selected);
+      if (!selected.length) {
+        message = 'Open cancelled';
+        return;
+      }
+      const nextWorkspaces = mergeWorkspaces(workspaces, selected);
+      const loadedByWorkspace = await Promise.all(selected.map(readWorkspaceDocuments));
+      const loaded = loadedByWorkspace.flat();
+      workspaces = nextWorkspaces;
+      expandedIds = [...new Set([...expandedIds, ...selected.map((workspace) => workspace.path)])];
       documents = mergeDocuments(documents, loaded);
       if (loaded.length) activeId = loaded[0].id;
-      if (!selected.length) message = 'Open cancelled';
-      else if (failed) message = `${loaded.length} file${loaded.length === 1 ? '' : 's'} opened; ${failed} folder${failed === 1 ? '' : 's'} could not be read`;
-      else if (!loaded.length) message = 'No Markdown files found in selected folder';
-      else message = `${loaded.length} file${loaded.length === 1 ? '' : 's'} opened from ${newWorkspaces.length} folder${newWorkspaces.length === 1 ? '' : 's'}`;
+      message = loaded.length
+        ? `${loaded.length} Markdown file${loaded.length === 1 ? '' : 's'} opened from folder`
+        : 'No Markdown files found in selected folder';
     } catch (error) {
       message = `Could not open folder: ${error instanceof Error ? error.message : String(error)}`;
     } finally { busy = false; }
+  }
+
+  function openWorkspaceMenu(event: MouseEvent, workspace: Workspace) {
+    event.preventDefault();
+    workspaceMenu = { x: event.clientX, y: event.clientY, workspace };
+  }
+
+  function closeWorkspaceMenu() {
+    workspaceMenu = null;
+  }
+
+  function removeWorkspace(workspace: Workspace) {
+    documents = documents.filter((document) => document.workspacePath !== workspace.path);
+    workspaces = workspaces.filter((current) => current.path !== workspace.path);
+    expandedIds = expandedIds.filter((id) => !id.startsWith(`${workspace.path}::`));
+    if (active?.workspacePath === workspace.path) activeId = documents.find((document) => document.workspacePath !== workspace.path)?.id ?? null;
+    message = `${workspace.name} removed from sidebar`;
+    closeWorkspaceMenu();
+  }
+
+  const workspaceNode = (workspace: Workspace): WorkspaceTreeNode => ({
+    id: workspace.path,
+    text: workspace.name,
+    nodes: workspaceTreeNodes(documents, workspace),
+  });
+
+  const workspaceTree = $derived(workspaces.map(workspaceNode));
+
+  const workspaceForNode = (node: WorkspaceTreeNode) =>
+    workspaces.find((workspace) => workspace.path === node.id);
+
+  function selectTreeNode(node: WorkspaceTreeNode) {
+    if (node.document) activeId = node.document.id;
+  }
+
+  function openWorkspaceMenuForNode(event: MouseEvent, node: WorkspaceTreeNode) {
+    const workspace = workspaceForNode(node);
+    if (workspace) openWorkspaceMenu(event, workspace);
+  }
+
+  function updateExpandedIds(event: CustomEvent<{ expandedIds: ReadonlyArray<string> }>) {
+    expandedIds = [...event.detail.expandedIds];
   }
 
   async function saveActive() {
@@ -94,16 +126,24 @@ Write **Markdown** and see it take shape right where you type.
     saveSettings({ font, theme });
   }
 
+  function closeSettingsOnBackdrop(event: MouseEvent) {
+    if (event.target === event.currentTarget) settingsOpen = false;
+  }
+
   function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') { settingsOpen = false; closeWorkspaceMenu(); }
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveActive(); }
-    if (event.key.toLowerCase() === 'o') { event.preventDefault(); void openFiles(); }
     if (event.key.toLowerCase() === 'k') { event.preventDefault(); void openWorkspaces(); }
   }
 
   onMount(() => {
     window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    window.addEventListener('click', closeWorkspaceMenu);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('click', closeWorkspaceMenu);
+    };
   });
 </script>
 
@@ -111,56 +151,72 @@ Write **Markdown** and see it take shape right where you type.
 
 <main class="app-shell" data-theme={theme} style={`--editor-font-family: ${fontOptions[font]}`}>
   <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">P</span><strong>Plainmark</strong></div>
-    <button class="open-button" onclick={openFiles} disabled={busy} aria-label="Open Markdown files">
-      <span>＋</span> Open files <kbd>Ctrl O</kbd>
-    </button>
-    <button class="open-button workspace-button" onclick={openWorkspaces} disabled={busy} aria-label="Open workspace folders">
-      <span>□</span> Open folders <kbd>Ctrl K</kbd>
-    </button>
-    <div class="section-label">OPEN DOCUMENTS</div>
+    <div class="brand"><span class="brand-mark">P</span><div class="sidebar-actions"><button class="icon-button" onclick={openWorkspaces} disabled={busy} aria-label="Open workspace folder" title="Open folder (Ctrl+K)">＋</button><button class="icon-button" onclick={() => settingsOpen = true} aria-label="Open settings" title="Settings">⚙</button></div></div>
+    <div class="section-label">WORKSPACES</div>
     <nav aria-label="Open documents">
-      {#each documents.filter((document) => !document.workspacePath) as document (document.id)}
-        <button class:active={document.id === activeId} class="file-item" onclick={() => activeId = document.id}>
-          <span class="file-icon">#</span><span class="file-name">{document.name}</span>
-          {#if isDirty(document)}<span class="dirty" title="Unsaved changes">●</span>{/if}
-        </button>
-      {/each}
-      {#each workspaces as workspace (workspace.path)}
-        <div class="workspace-section">
-          <div class="workspace-label" title={workspace.path}>⌁ {workspace.name}</div>
-          {#each documentsForWorkspace(documents, workspace.path) as document (document.id)}
-            <button class:active={document.id === activeId} class="file-item workspace-file" onclick={() => activeId = document.id} title={document.relativePath}>
-              <span class="file-icon">#</span><span class="file-name">{document.relativePath ?? document.name}</span>
+      {#if workspaceTree.length}
+        <TreeView
+          nodes={workspaceTree}
+          size="compact"
+          hideLabel
+          labelText="Workspaces"
+          selectedIds={activeId ? [activeId] : []}
+          {expandedIds}
+          virtualize={{ containerHeight: '100%', overscan: 8 }}
+          on:select={(event) => selectTreeNode(event.detail)}
+          on:toggle:change={updateExpandedIds}
+        >
+          {#snippet children({ node })}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <span class="tree-node-text" class:dirty-node={Boolean(node.document && isDirty(node.document))} oncontextmenu={(event) => openWorkspaceMenuForNode(event, node)}>{node.text}</span>
+          {/snippet}
+        </TreeView>
+      {/if}
+      {#if standaloneDocuments.length}
+        <div class="workspace-section standalone-section">
+          <div class="other-files-label">Other Files</div>
+          {#each standaloneDocuments as document (document.id)}
+            <button class:active={document.id === activeId} class="file-item workspace-file" onclick={() => activeId = document.id}>
+              <span class="file-icon">#</span><span class="file-name">{document.name}</span>
               {#if isDirty(document)}<span class="dirty" title="Unsaved changes">●</span>{/if}
             </button>
-          {:else}
-            <p class="sidebar-empty workspace-empty">No Markdown files</p>
           {/each}
         </div>
-      {/each}
+      {/if}
       {#if !documents.length && !workspaces.length}
         <p class="sidebar-empty">No files open yet.<br />Choose a Markdown file or folder to begin.</p>
       {/if}
     </nav>
-    <div class="settings" aria-label="Editor settings">
-      <label>Font
-        <select value={font} onchange={(event) => setFont(event.currentTarget.value)} aria-label="Editor font">
-          <option value="gothic">Gothic</option>
-          <option value="system">System sans</option>
-          <option value="serif">Serif</option>
-        </select>
-      </label>
-      <label>Theme
-        <select value={theme} onchange={(event) => setTheme(event.currentTarget.value)} aria-label="Color theme">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="midnight">Midnight</option>
-        </select>
-      </label>
-    </div>
     <div class="privacy"><span>◇</span><div><strong>Local only</strong><small>Your writing never leaves this device.</small></div></div>
   </aside>
+
+  {#if workspaceMenu}
+    <div class="context-menu" style={`left: ${workspaceMenu.x}px; top: ${workspaceMenu.y}px`} role="menu">
+      <button role="menuitem" onclick={() => removeWorkspace(workspaceMenu!.workspace)}>Remove Folder</button>
+    </div>
+  {/if}
+
+  {#if settingsOpen}
+    <div class="settings-overlay" role="presentation" onclick={closeSettingsOnBackdrop}>
+      <div class="settings-panel" role="dialog" aria-modal="true" aria-label="Editor settings">
+        <header><strong>Settings</strong><button onclick={() => settingsOpen = false} aria-label="Close settings">×</button></header>
+        <label>Font
+          <select value={font} onchange={(event) => setFont(event.currentTarget.value)} aria-label="Editor font">
+            <option value="gothic">Gothic</option>
+            <option value="system">System sans</option>
+            <option value="serif">Serif</option>
+          </select>
+        </label>
+        <label>Theme
+          <select value={theme} onchange={(event) => setTheme(event.currentTarget.value)} aria-label="Color theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="midnight">Midnight</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  {/if}
 
   <section class="workspace">
     <header class="topbar">
@@ -176,7 +232,7 @@ Write **Markdown** and see it take shape right where you type.
           <Editor documentId={active.id} markdown={active.markdown} onChange={(value) => documents = updateMarkdown(documents, active!.id, value)} />
         {/key}
       {:else}
-        <div class="empty-state"><div class="empty-logo">P</div><h1>Open a Markdown file</h1><p>Your document will appear here, ready to edit.</p><button onclick={openFiles}>Choose files</button><button class="empty-folder-button" onclick={openWorkspaces}>Choose folder</button><small>or press Ctrl+O / Ctrl+K</small></div>
+        <div class="empty-state"><div class="empty-logo">P</div><h1>Open a Markdown folder</h1><p>Your documents will appear here, ready to edit.</p><button onclick={openWorkspaces}>Choose folder</button><small>or press Ctrl+K</small></div>
       {/if}
     </div>
     <footer><span>{message}</span><span>Markdown <b>·</b> UTF-8</span></footer>
