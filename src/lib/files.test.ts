@@ -15,12 +15,14 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   writeTextFile: vi.fn(),
 }));
 
-import { folderPathsIn, markdownFilesIn, pickWorkspaceFolders, readWorkspaceDocuments } from './files';
+import { folderPathsIn, markdownFilesIn, pickWorkspaceFolders, readMarkdownFile, readWorkspace, readWorkspaceDocuments } from './files';
 import { createWorkspace } from './document';
 
 describe('workspace file access', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    readDir.mockReset();
+    readTextFile.mockReset();
   });
 
   it('returns no workspace when the directory dialog is cancelled', async () => {
@@ -97,6 +99,23 @@ describe('workspace file access', () => {
     expect(readDir).toHaveBeenLastCalledWith('C:/workspace/docs');
   });
 
+  it('scans workspace paths without reading Markdown contents', async () => {
+    readDir
+      .mockResolvedValueOnce([
+        { name: 'docs', isFile: false, isDirectory: true },
+        { name: 'note.md', isFile: true, isDirectory: false },
+      ])
+      .mockResolvedValueOnce([
+        { name: 'guide.markdown', isFile: true, isDirectory: false },
+      ]);
+
+    await expect(readWorkspace('C:/workspace')).resolves.toMatchObject({
+      folderPaths: ['docs'],
+      markdownPaths: ['C:/workspace/docs/guide.markdown', 'C:/workspace/note.md'],
+    });
+    expect(readTextFile).not.toHaveBeenCalled();
+  });
+
   it('adds workspace metadata when reading discovered files', async () => {
     readDir.mockResolvedValueOnce([{ name: 'note.md', isFile: true, isDirectory: false }]);
     readTextFile.mockResolvedValueOnce('# Note');
@@ -108,6 +127,13 @@ describe('workspace file access', () => {
       workspaceName: 'workspace',
       markdown: '# Note',
     });
+  });
+
+  it('reads an individual Markdown document on demand', async () => {
+    readTextFile.mockResolvedValueOnce('# Note');
+
+    await expect(readMarkdownFile('C:/workspace/note.md')).resolves.toBe('# Note');
+    expect(readTextFile).toHaveBeenCalledWith('C:/workspace/note.md');
   });
 
   it('keeps readable Markdown files when a nested directory or file cannot be read', async () => {

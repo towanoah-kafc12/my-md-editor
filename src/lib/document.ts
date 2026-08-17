@@ -4,6 +4,7 @@ export interface MarkdownDocument {
   name: string;
   markdown: string;
   savedMarkdown: string;
+  loaded: boolean;
   workspacePath?: string;
   workspaceName?: string;
   relativePath?: string;
@@ -13,6 +14,7 @@ export interface Workspace {
   path: string;
   name: string;
   folderPaths?: string[];
+  markdownPaths?: string[];
 }
 
 export const fileNameFromPath = (path: string) => path.split(/[\\/]/).pop() || path;
@@ -25,10 +27,15 @@ export const relativePathFromRoot = (rootPath: string, path: string) => {
   return normalizedPath.startsWith(prefix) ? normalizedPath.slice(prefix.length) : fileNameFromPath(path);
 };
 
-export const createWorkspace = (path: string, folderPaths: string[] = []): Workspace => ({
+export const createWorkspace = (
+  path: string,
+  folderPaths: string[] = [],
+  markdownPaths?: string[],
+): Workspace => ({
   path,
   name: fileNameFromPath(path),
   folderPaths,
+  ...(markdownPaths && { markdownPaths }),
 });
 
 export const createDocument = (
@@ -41,12 +48,38 @@ export const createDocument = (
   name: fileNameFromPath(path),
   markdown,
   savedMarkdown: markdown,
+  loaded: true,
   ...(workspace && {
     workspacePath: workspace.path,
     workspaceName: workspace.name,
     relativePath: relativePathFromRoot(workspace.path, path),
   }),
 });
+
+export const createWorkspaceDocument = (
+  path: string,
+  workspace: Workspace,
+): MarkdownDocument => ({
+  id: path,
+  path,
+  name: fileNameFromPath(path),
+  markdown: '',
+  savedMarkdown: '',
+  loaded: false,
+  workspacePath: workspace.path,
+  workspaceName: workspace.name,
+  relativePath: relativePathFromRoot(workspace.path, path),
+});
+
+export function markDocumentLoaded(
+  documents: MarkdownDocument[],
+  path: string,
+  markdown: string,
+): MarkdownDocument[] {
+  return documents.map((document) =>
+    document.path === path ? { ...document, markdown, savedMarkdown: markdown, loaded: true } : document,
+  );
+}
 
 export const mergeWorkspaces = (current: Workspace[], incoming: Workspace[]) => {
   const existingPaths = new Set(current.map((workspace) => workspace.path));
@@ -92,7 +125,9 @@ export function workspaceTreeNodes(
     ensureFolder(folderPath.split('/').filter(Boolean));
   }
 
-  for (const document of documentsForWorkspace(documents, workspace.path)) {
+  for (const path of workspace.markdownPaths ?? []) {
+    const document = documents.find((current) => current.path === path)
+      ?? createWorkspaceDocument(path, workspace);
     const parts = (document.relativePath ?? document.name).split('/').filter(Boolean);
     const fileName = parts.pop() ?? document.name;
     const node = ensureFolder(parts);

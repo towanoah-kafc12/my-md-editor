@@ -1,8 +1,8 @@
 <script lang="ts">
   import { TreeView } from 'carbon-components-svelte';
   import Editor from './lib/Editor.svelte';
-  import { createDocument, isDirty, markSaved, mergeDocuments, mergeWorkspaces, updateMarkdown, workspaceTreeNodes, type MarkdownDocument, type Workspace, type WorkspaceTreeNode } from './lib/document';
-  import { pickWorkspaceFolders, readWorkspaceDocuments, saveMarkdownFile } from './lib/files';
+  import { createDocument, createWorkspaceDocument, isDirty, markDocumentLoaded, markSaved, mergeDocuments, mergeWorkspaces, updateMarkdown, workspaceTreeNodes, type MarkdownDocument, type Workspace, type WorkspaceTreeNode } from './lib/document';
+  import { pickWorkspaceFolders, readMarkdownFile, saveMarkdownFile } from './lib/files';
   import { fontOptions, loadSettings, saveSettings, type FontChoice, type ThemeChoice } from './lib/settings';
   import { onMount } from 'svelte';
 
@@ -27,6 +27,7 @@ Write **Markdown** and see it take shape right where you type.
   let theme: ThemeChoice = $state(settings.theme);
   let message = $state('Ready');
   let busy = $state(false);
+  let loadingDocumentPath = $state<string | null>(null);
   let settingsOpen = $state(false);
   let workspaceMenu: { x: number; y: number; workspace: Workspace } | null = $state(null);
   let expandedIds: string[] = $state([]);
@@ -46,14 +47,16 @@ Write **Markdown** and see it take shape right where you type.
         return;
       }
       const nextWorkspaces = mergeWorkspaces(workspaces, selected);
-      const loadedByWorkspace = await Promise.all(selected.map(readWorkspaceDocuments));
-      const loaded = loadedByWorkspace.flat();
+      const discovered = selected.flatMap((workspace) =>
+        (workspace.markdownPaths ?? []).map((path) => createWorkspaceDocument(path, workspace)),
+      );
       workspaces = nextWorkspaces;
       expandedIds = [...new Set([...expandedIds, ...selected.map((workspace) => workspace.path)])];
-      documents = mergeDocuments(documents, loaded);
-      if (loaded.length) activeId = loaded[0].id;
-      message = loaded.length
-        ? `${loaded.length} Markdown file${loaded.length === 1 ? '' : 's'} opened from folder`
+      documents = mergeDocuments(documents, discovered);
+      const firstDocument = discovered[0];
+      if (firstDocument) await selectDocument(firstDocument);
+      message = discovered.length
+        ? `${discovered.length} Markdown file${discovered.length === 1 ? '' : 's'} opened from folder`
         : 'No Markdown files found in selected folder';
     } catch (error) {
       message = `Could not open folder: ${error instanceof Error ? error.message : String(error)}`;
@@ -89,8 +92,28 @@ Write **Markdown** and see it take shape right where you type.
   const workspaceForNode = (node: WorkspaceTreeNode) =>
     workspaces.find((workspace) => workspace.path === node.id);
 
+  async function selectDocument(document: MarkdownDocument) {
+    const current = documents.find((candidate) => candidate.path === document.path) ?? document;
+    activeId = current.id;
+    if (current.loaded || loadingDocumentPath === current.path) return;
+
+    loadingDocumentPath = current.path;
+    message = `Loading ${current.name}`;
+    try {
+      const markdown = await readMarkdownFile(current.path);
+      documents = markDocumentLoaded(documents, current.path, markdown);
+    } catch (error) {
+      if (activeId === current.id) {
+        activeId = null;
+        message = `Could not open ${current.name}: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    } finally {
+      if (loadingDocumentPath === current.path) loadingDocumentPath = null;
+    }
+  }
+
   function selectTreeNode(node: WorkspaceTreeNode) {
-    if (node.document) activeId = node.document.id;
+    if (node.document) void selectDocument(node.document);
   }
 
   function openWorkspaceMenuForNode(event: MouseEvent, node: WorkspaceTreeNode) {
@@ -227,10 +250,12 @@ Write **Markdown** and see it take shape right where you type.
       <button class="save-button" class:available={active && isDirty(active)} onclick={saveActive} disabled={!active || !isDirty(active) || busy} aria-label="Save active file">Save <kbd>Ctrl S</kbd></button>
     </header>
     <div class="canvas">
-      {#if active}
+      {#if active?.loaded}
         {#key active.id}
           <Editor documentId={active.id} markdown={active.markdown} onChange={(value) => documents = updateMarkdown(documents, active!.id, value)} />
         {/key}
+      {:else if active && loadingDocumentPath === active.path}
+        <div class="empty-state"><div class="empty-logo">P</div><h1>Loading {active.name}</h1><p>Your document will be ready shortly.</p></div>
       {:else}
         <div class="empty-state"><div class="empty-logo">P</div><h1>Open a Markdown folder</h1><p>Your documents will appear here, ready to edit.</p><button onclick={openWorkspaces}>Choose folder</button><small>or press Ctrl+K</small></div>
       {/if}
